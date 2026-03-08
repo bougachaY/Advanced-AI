@@ -321,7 +321,7 @@ with torch.no_grad():
         # TODO:
         # 1. Encode images
         # 2. Normalize encodings
-        # 3. Compute logits using text_features,
+        # 3. Compute logits with Cosine Similarity using text_features,
         # images_features and logit_scale=model.logit_scale.exp()
         # Get the pred id (preds)
         n_correct += (preds == labels).sum().item()
