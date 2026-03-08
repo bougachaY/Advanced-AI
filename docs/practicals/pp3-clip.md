@@ -195,7 +195,7 @@ flowchart TD
 #### `encode_text`
 
 !!! Important Note 
-    This function takes `text` as input, which is a sequence of tokens of size `context_length`. The input text is supposed to be < `context_length`: the EOT token, which is the last token of the vocabulary is added at the end and then the sequence is padded with token ID 0 to achieve `context_length`. For instance, if my input text is `[23, 45, 12]`and the `context_length`=5, then `text`=`[23, 45, 12, 50000, 0]` for a vocabulary of size 50000.
+    This function takes `text` as input, which is a sequence of tokens of size `context_length`. The input text is supposed to be < `context_length`: the EOT token, which is the last token of the vocabulary is added at the end and then the sequence is padded with token ID 0 to achieve `context_length`. For instance, if the input text is `[23, 45, 12]`and  `context_length`=5, then `text`=`[23, 45, 12, 49999, 0]` for a vocabulary of size 50000.
 
 
 ```python
