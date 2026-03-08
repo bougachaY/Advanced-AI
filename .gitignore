@@ -15,4 +15,6 @@ env/
 .venv/
 .aai_env/
 site/
-truc
+PP3: CLIP/data/cifar*
+PP3: CLIP/eval_cifar100_solution.py
+PP3: CLIP/model_solution.py
