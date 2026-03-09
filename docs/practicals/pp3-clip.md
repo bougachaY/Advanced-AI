@@ -121,7 +121,7 @@ This checks that your `ResidualAttentionBlock` implementation runs and returns t
 
 ```mermaid
 flowchart TD
-    IMG["image [B,3,H,W]"] --> CONV["conv1 (used to lift every patch to width)"]
+    IMG["image [batch_size, 3, H, W]"] --> CONV["conv1 (used to lift every patch to width)"]
     CONV --> CAT["prepend class token"]
     CAT --> POS["add positional embedding"]
     POS --> LNPRE["Pre-LayerNorm"]
@@ -129,7 +129,7 @@ flowchart TD
     TR -->  CLS["take cls token x[:,0,:]"]
     CLS --> LNPOST["Post-LayerNorm"]
     LNPOST --> PROJ["@ proj"]
-    PROJ --> OUT["image embedding [B,output_dim]"]
+    PROJ --> OUT["image embedding [batch_size, output_dim]"]
 ```
 
 In `model.py`, the `forward` contains:
@@ -143,7 +143,7 @@ def forward(self, x: torch.Tensor):
         x.shape[0], 1, x.shape[-1], dtype=x.dtype, device=x.device
     )
     x = # TODO: prepend class_embedding as the first token using torch.cat
-    #   concatenate along dim=1. Output shape: [*, grid**2 + 1, width]
+    #   concatenate along dim=1. Output shape: [batch_size, grid**2 + 1, width]
     x = # TODO: add self.positional_embedding to x (cast positional_embedding to x.dtype)
     x = self.ln_pre(x)
 
@@ -203,9 +203,9 @@ def encode_text(self, text):
     x = self.token_embedding(text).type(self.dtype)  # [batch_size, context_length, transformer_width]
 
     x = # TODO: add self.positional_embedding to x (cast to self.dtype)
-    x = x.permute(1, 0, 2)  # NLD -> LND
+    x = x.permute(1, 0, 2)  # [batch_size, context_length, transformer_width] -> [context_length, batch_size, transformer_width]
     x = self.transformer(x)
-    x = x.permute(1, 0, 2)  # LND -> NLD
+    x = x.permute(1, 0, 2)  # [context_length, batch_size, transformer_width] -> [batch_size, context_length, transformer_width]
     x = self.ln_final(x).type(self.dtype)
 
     # take features from the eot embedding (eot_token is the highest number in each sequence)
@@ -223,15 +223,15 @@ def encode_text(self, text):
 
 ```mermaid
 flowchart TD
-    TXT["text ids [B,context_length]"] --> TOK["token_embedding -> [B,context_length,width]"]
+    TXT["text ids [batch_size, context_length]"] --> TOK["token_embedding -> [batch_size, context_length, transformer_width]"]
     TOK --> POS[" + positional_embedding"]
     POS --> TR["text transformer"]
     TR --> LNF["LayerNorm"]
     TXT --> EOT["eot_positions = text.argmax(dim=-1)"]
-    LNF --> GATHER["gather x[arange(B), eot_positions]"]
+    LNF --> GATHER["gather x[arange(batch_size), eot_positions]"]
     EOT --> GATHER
     GATHER --> PROJ["@ text_projection"]
-    PROJ --> OUT["text embedding [B,embed_dim]"]
+    PROJ --> OUT["text embedding [batch_size, embed_dim]"]
 ```
 
 #### `forward`

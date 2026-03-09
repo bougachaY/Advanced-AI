@@ -151,13 +151,13 @@ class VisionTransformer(nn.Module):
             x.shape[0], 1, x.shape[-1], dtype=x.dtype, device=x.device
         )
         x = # TODO: prepend class_embedding as the first token using torch.cat
-        #   concatenate along dim=1. Output shape: [*, grid**2 + 1, width]
+        #   concatenate along dim=1. Output shape: [batch_size, grid**2 + 1, width]
         x = # TODO: add self.positional_embedding to x (cast positional_embedding to x.dtype)
         x = self.ln_pre(x)
 
-        x = x.permute(1, 0, 2)  # [batch_size, grid ** 2, width] -> [grid ** 2, batch_size, width] (required by nn.MultiheadAttention)
+        x = x.permute(1, 0, 2)  # [batch_size, grid ** 2 + 1, width] -> [grid ** 2 + 1, batch_size, width] (required by nn.MultiheadAttention)
         x = self.transformer(x)
-        x = x.permute(1, 0, 2)  # [grid ** 2, batch_size, width] -> [batch_size, grid ** 2, width]
+        x = x.permute(1, 0, 2)  # [grid ** 2 + 1, batch_size, width] -> [batch_size, grid ** 2 + 1, width]
 
         x = # TODO: apply self.ln_post to the class token only (position 0: x[:, 0, :])
         if self.proj is not None:
@@ -320,13 +320,13 @@ class CLIP(nn.Module):
         """
         x = self.token_embedding(text).type(self.dtype)  # [batch_size, context_length, transformer_width]
 
-        x = # TODO: add self.positional_embedding to x (cast to self.dtype like in l. 330)
+        x = # TODO: add self.positional_embedding to x (cast to self.dtype)
         x = x.permute(1, 0, 2)  # [batch_size, context_length, transformer_width] -> [context_length, batch_size, transformer_width]
         x = self.transformer(x)
         x = x.permute(1, 0, 2)  # [context_length, batch_size, transformer_width] -> [batch_size, context_length, transformer_width]
         x = self.ln_final(x).type(self.dtype)
 
-        # x.shape = [batch_size, n_ctx, transformer.width]
+        # x.shape = [batch_size, context_length, transformer_width]
         # take features from the eot embedding (eot_token is the highest number in each sequence)
         x = # TODO: index x at the EOT position for each sequence, then project with self.text_projection
         #   Hint: text.argmax(dim=-1) gives the position of the highest token id (= EOT) in each row.
@@ -364,7 +364,7 @@ class CLIP(nn.Module):
         logits_per_image = # TODO: logit_scale * image_features @ text_features.t()
         logits_per_text  = # TODO: transpose of logits_per_image
 
-        # shape = [global_batch_size, global_batch_size]
+        # shape = [batch_size, batch_size]
         return logits_per_image, logits_per_text
 
 
