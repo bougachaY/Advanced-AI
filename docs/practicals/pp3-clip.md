@@ -382,3 +382,7 @@ Solution: [![Open In Colab](https://colab.research.google.com/assets/colab-badge
 You can try classification with linear probing. Try to fit Cifar100 with a Logistic Regression on the image embedding space.
 
 Do not use the full training dataset (it will take too long). Fit your dataset on 10000 train images (and adjust if needed).
+
+## Please take the time to give a feedback!
+
+Please fill the [feedback form](https://docs.google.com/forms/d/e/1FAIpQLSd4qRiPho43N8hZEpKEBhLpUe0W-wOoYNQRZj24-elrwj3esA/viewform?usp=publish-editor) to leave feedback so the future PPs can be improved.
