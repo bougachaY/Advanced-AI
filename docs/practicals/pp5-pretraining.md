@@ -77,6 +77,7 @@ Then you can clone your forked repo with:
 
 ```bash
 git clone your_forked_URL
+cd repo_name
 ```
 
 Then add this repo as a remote to pull updates
@@ -109,7 +110,7 @@ mkdir -p /tmpdir/YOUR_USERNAME/envs/aai
 Then, go to your project directory with `cd` and launch the apptainer image on the **login** node (do not forget to replace YOUR_USERNAME):
 
 ```bash
-apptainer shell --env PATH=$HOME/.local/bin:$PATH --env UV_PROJECT_ENVIRONMENT=/tmpdir/irtnvllpl/envs/aai --bind /tmpdir,/work --nv /work/conteneurs/sessions-interactives/pytorch-24.02-py3-calmip-si.sif
+apptainer shell --env PATH=$HOME/.local/bin:$PATH --env UV_PROJECT_ENVIRONMENT=/tmpdir/YOUR_USERNAME/envs/aai --bind /tmpdir,/work --nv /work/conteneurs/sessions-interactives/pytorch-24.02-py3-calmip-si.sif
 ```
 
 !!! Hint
@@ -377,7 +378,21 @@ Instead of training from scratch, you can start from the pretrained GPT-2 (124M 
 4. Submit your job and monitor its progress as before.
 5. Compare the final validation loss with the pretrained-from-scratch model. Which one is better?
 
-At the end of the training, you can sample from the finetuned model (from the apptainer)using:
+At the end of the training, you can sample from the finetuned model (from the apptainer) using:
+
+!!! Note
+    Because of tiktoken trying to download the tokenizer files and the apptainer blocking the HTTP, you will need to create a conda env:
+
+    ```bash
+    module load conda
+    conda create --name tiktoken
+    conda activate tiktoken
+    conda install tiktoken
+    python -c "import tiktoken; tiktoken.get_encoding('gpt2')"
+    ``` 
+
+    This will download the files and normally you will be able to use tiktoken in the apptainer.
+
 
 ```bash
 uv run python sample.py --out_dir=out-french-philosophy-ft --start="Your prompt here"
