@@ -109,7 +109,7 @@ mkdir -p /tmpdir/YOUR_USERNAME/envs/aai
 Then, go to your project directory with `cd` and launch the apptainer image on the **login** node (do not forget to replace YOUR_USERNAME):
 
 ```bash
-apptainer shell --env PATH=$HOME/.local/bin:$PATH --env UV_PROJECT_ENVIRONMENT=/tmpdir/YOUR_USERNAME/envs/aai --bind /tmpdir,/work --nv /work/conteneurs/sessions-interactives/pytorch-24.02-py3-calmip-si.sif
+apptainer shell --env PATH=$HOME/.local/bin:$PATH --env UV_PROJECT_ENVIRONMENT=/tmpdir/irtnvllpl/envs/aai --bind /tmpdir,/work --nv /work/conteneurs/sessions-interactives/pytorch-24.02-py3-calmip-si.sif
 ```
 
 !!! Hint
@@ -358,7 +358,7 @@ The training configuration is in `config/train_french_philosophy.py`. It defines
 At the end of the training, you can sample from the model using:
 
 ```bash
-uv run python sample.py --out_dir out-french-philosophy --start "Your prompt here"
+uv run python sample.py --out_dir=out-french-philosophy --start="Your prompt here"
 ```
 **Exercice** Try to run it on a compute node in interactive mode to see how using GPUs accelerate the sampling.
 
@@ -380,7 +380,7 @@ Instead of training from scratch, you can start from the pretrained GPT-2 (124M 
 At the end of the training, you can sample from the finetuned model using:
 
 ```bash
-uv run python sample.py --out_dir out-french-philosophy-ft --start "Your prompt here"
+uv run python sample.py --out_dir=out-french-philosophy-ft --start="Your prompt here"
 ```
 
 **Exercice** Try to run it on a compute node in interactive mode to see how using GPUs accelerate the sampling.
