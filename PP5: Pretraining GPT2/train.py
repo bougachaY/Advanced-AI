@@ -103,9 +103,9 @@ def get_batch(split):
         data = np.memmap(os.path.join(data_dir, "train.bin"), dtype=np.uint16, mode="r")
     else:
         data = np.memmap(os.path.join(data_dir, "val.bin"), dtype=np.uint16, mode="r")
-    ix = #TODO mention that block_size is context length
-    x = #TODO
-    y = #TODO
+    ix = # TODO: sample batch_size random starting indices in [0, len(data) - block_size). block_size is the context length.
+    x = # TODO: for each index i in ix, extract a chunk of block_size tokens from data as input. Stack them into a tensor of shape (batch_size, block_size). Cast to int64.
+    y = # TODO: for each index i in ix, extract a chunk of block_size tokens shifted by 1 position (i+1 to i+1+block_size) as target. Stack into the same shape. Cast to int64.
     if device_type == "cuda":
         # pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
         x, y = x.pin_memory().to(device, non_blocking=True), y.pin_memory().to(
@@ -284,8 +284,8 @@ while True:
     # and using the GradScaler if data type is float16
     for micro_step in range(gradient_accumulation_steps):
         with ctx:
-            logits = #TODO
-            loss = #TODO
+            logits = # TODO: forward pass through the model on X
+            loss = # TODO: compute the cross-entropy loss between the model predictions and targets Y. Reshape logits to (B*T, vocab_size) and Y to (B*T). Use ignore_index=-1.
             loss = (
                 loss / gradient_accumulation_steps
             )  # scale the loss to account for gradient accumulation

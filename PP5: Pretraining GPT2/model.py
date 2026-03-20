@@ -311,18 +311,17 @@ class GPT(nn.Module):
             # if the sequence context is growing too long we must crop it at block_size
             idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
             # forward the model to get the logits for the index in the sequence
-            logits, _ = self(idx_cond)
+            logits = # TODO: call the model on idx_cond
             # pluck the logits at the final step and scale by desired temperature
-            logits = logits[:, -1, :] / temperature
+            logits = # TODO: select only the logits at the last time step (index -1), then divide by temperature
             # optionally crop the logits to only the top k options
             if top_k is not None:
-                v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
-                logits[logits < v[:, [-1]]] = -float('Inf')
+                v, _ = # TODO: use torch.topk to get the top min(top_k, logits.size(-1)) values
+                # TODO: set all logits below the smallest top-k value (v[:, [-1]]) to -float('Inf')
             # apply softmax to convert logits to (normalized) probabilities
-            probs = F.softmax(logits, dim=-1)
+            probs = # TODO: apply softmax along the last dimension
             # sample from the distribution
-            idx_next = torch.multinomial(probs, num_samples=1)
+            idx_next = # TODO: sample one token index from the probability distribution (look at torch.multinomial)
             # append sampled index to the running sequence and continue
-            idx = torch.cat((idx, idx_next), dim=1)
-
+            idx = # TODO: concatenate idx_next to idx along dimension 1
         return idx

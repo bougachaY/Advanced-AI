@@ -1,9 +1,14 @@
 # Programming Practical 5 - Pretraining GPT2 on a cluster
 
-TODO complete with an introduction outlining the programming practical and the learning outcomes. Emphasize that SLURM is ubiquitous in the AI industry to run code on clusters and that learning how to use it is a crucial skill for any AI practitioner. 
+In this Programming Practical, you will **pretrain and finetune a GPT-2 language model** on a GPU cluster managed by **SLURM**. You will learn how to:
 
+- Connect to a remote cluster and set up your environment.
+- Write and submit **SLURM batch jobs** — the standard way to run workloads on HPC clusters, ubiquitous in the AI industry. Mastering SLURM is a crucial skill for any AI practitioner who needs to train models at scale.
+- Complete the missing parts of a GPT-2 implementation (data loading, training loop, and text generation).
+- Pretrain a small GPT-2 from scratch on a French Philosophy corpus.
+- Finetune a pretrained GPT-2 on the same corpus and compare results.
 
-s
+The code is based on Karpathy's [nanoGPT](https://github.com/karpathy/nanoGPT/tree/master?tab=readme-ov-files), a minimalist but complete GPT-2 implementation.
 ## 1. Logging in the cluster
 
 For convenience, create a config file in `~/.ssh/config` with the following content:
@@ -256,17 +261,98 @@ The code you will use is taken from Karpathy's [nanoGPT](https://github.com/karp
 
 ### Complete the missing parts
 
-Before launching your first training on the cluster, you will have to complete the missing parts in the code involved in training and generation, as in previous PPs.
+Before launching your first training on the cluster, you will have to complete the missing parts in the code involved in training and generation, as in previous PPs. Start by reading `model.py` and `train.py` to understand the overall structure.
 
-TODO fill this section - see instructions.
+---
+
+#### `get_batch` in `train.py`
+
+**What it does:** a simple data loader that samples random chunks from a memory-mapped binary file of token ids. Each call returns a batch of input-target pairs for next-token prediction.
+
+The data is stored as a flat array of token ids. For a language model, the input `x` is a window of `block_size` consecutive tokens, and the target `y` is the same window shifted by one position (i.e., for each token in `x`, the target is the next token in the sequence).
+
+```python
+def get_batch(split):
+    ...
+    data = np.memmap(...)
+    ix = # TODO: sample batch_size random starting indices in [0, len(data) - block_size)
+    x  = # TODO: for each index i in ix, extract a chunk of block_size tokens as input
+    y  = # TODO: for each index i in ix, extract a chunk of block_size tokens shifted by 1 as target
+    ...
+```
+
+- `ix`: use `torch.randint` to sample `batch_size` random starting positions. The upper bound should ensure that a full window of `block_size` tokens fits.
+- `x`: for each starting index `i`, slice between `i` and `i + block_size`, convert to `np.int64`, wrap in a tensor, and stack all slices into a `(batch_size, block_size)` tensor.
+- `y`: same as `x`, but shifted by one.
+
+---
+
+#### Training loop in `train.py`
+
+**What it does:** the forward-backward pass inside the gradient accumulation loop. The model receives input tokens `X` and must produce predictions that are compared against the targets `Y` using cross-entropy loss.
+
+```python
+for micro_step in range(gradient_accumulation_steps):
+    with ctx:
+        logits = # TODO: forward pass through the model
+        loss   = # TODO: compute the cross-entropy loss
+        loss = loss / gradient_accumulation_steps
+    ...
+```
+
+- `logits`: call the model on `X`. The output has shape `(batch_size, block_size, vocab_size)`.
+- `loss`: use `F.cross_entropy`. You need to reshape `logits` to `(B*T, vocab_size)` and `Y` to `(B*T)`. Use `ignore_index=-1`.
+
+---
+
+#### `generate` in `model.py`
+
+**What it does:** autoregressive text generation. Given a conditioning sequence of token ids, the model predicts one token at a time, appends it to the sequence, and repeats.
+
+The generation loop has the following steps:
+
+1. **Forward pass** — run the (possibly cropped) context through the model to get logits.
+2. **Select & scale** — take only the logits at the last time step and divide by the temperature.
+3. **Top-k filtering** — optionally zero out all logits outside the top-k most likely tokens.
+4. **Sample** — convert logits to probabilities with softmax, then sample one token.
+5. **Append** — concatenate the new token to the running sequence.
+
+```python
+@torch.no_grad()
+def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
+    for _ in range(max_new_tokens):
+        idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
+        logits = # TODO: call the model on idx_cond
+        logits = # TODO: select the logits at the last time step (index -1), divide by temperature
+        if top_k is not None:
+            v, _ = # TODO: use torch.topk to get the top-k values
+            # TODO: set all logits below the smallest top-k value (v[:, [-1]]) to -float('Inf')
+        probs    = # TODO: apply softmax to get probabilities
+        idx_next = # TODO: sample from the distribution (torch.multinomial)
+        idx      = # TODO: concatenate idx_next to idx along dim 1
+    return idx
+```
+
+- For the forward pass, simply call the model — the model's `forward` method returns logits of shape `(batch, seq_len, vocab_size)`.
+- `logits[:, -1, :]` selects the predictions for the last position. Dividing by `temperature` controls randomness: lower temperature → more deterministic.
+- `torch.topk` returns the `k` largest values; use the smallest of those as a threshold to mask everything else to `-Inf`.
+- `F.softmax(logits, dim=-1)` converts to probabilities; `torch.multinomial(probs, num_samples=1)` draws one sample per row.
+- `torch.cat((idx, idx_next), dim=1)` grows the sequence by one token.
 
 
 ### Pretraining on French Philosophy
 
-The dataset you will use is a collection of French Philosophy books from the [Gutenberg project](https://www.gutenberg.org/). You can find the dataset in `data/philosophy`. It is already split in a training and a validation set.
+The dataset you will use is a collection of French Philosophy books from the [Gutenberg project](https://www.gutenberg.org/). You can find the dataset in `data/french_philosophy`. It is already split in a training and a validation set.
 
+The training configuration is in `config/train_french_philosophy.py`. It defines a small GPT-2 (6 layers, 6 heads, 384-dim embeddings) trained for 5000 iterations on 256-token contexts. Take a moment to read the config file and understand the hyperparameters.
 
-TODO Complete here with instructions to run the training. The training will be launched with an sbatch file and students should complete it themselve as an exercice (prepend **Exercice**)
+**Exercice** Create an `.sbatch` script (based on `sbatch_scripts/template.sbatch`) that launches the pretraining. You will need to:
+
+1. Copy the template and adapt `YOUR_USERNAME` and the script path.
+2. Set the command to `uv run python train.py config/train_french_philosophy.py`.
+3. Set an appropriate time limit (30 minutes should be sufficient).
+4. Submit your job with `sbatch --reservation=tpirt4 your_script.sbatch`.
+5. Monitor progress with `squeue -u $USER -l` and check the output/error files in `~/job_results/`.
 
 
 At the end of the training, you can sample from the model using:
@@ -278,13 +364,23 @@ uv run python sample.py --out_dir out-french-philosophy --start "Your prompt her
 
 ### Finetuning on French Philosophy
 
+Instead of training from scratch, you can start from the pretrained GPT-2 (124M parameters) weights and finetune on the French Philosophy corpus. The configuration is in `config/finetune_french_philosophy.py`. Notice the key differences with pretraining from scratch: lower learning rate, no learning rate decay, dropout enabled, and the model is initialized from `gpt2` weights.
 
-TODO Complete here with instructions to run the training. The training will be launched with an sbatch file and students should complete it themselve as an exercice (prepend **Exercice**)
+!!! Note
+    The finetuning config uses `init_from = "gpt2"`, which downloads the pretrained weights from HuggingFace. Since compute nodes have no internet access, you must first run the script once on the **login node** so that the weights are cached. Run: `uv run python train.py config/finetune_french_philosophy.py` on the login node before submitting the job. This should detect that you are not in a compute node and stop before training.
 
-At the end of the training, you can sample from the model using:
+**Exercice** Create an `.sbatch` script that launches the finetuning. You will need to:
+
+1. Copy the template and adapt `YOUR_USERNAME` and the script path.
+2. Set the command to `uv run python train.py config/finetune_french_philosophy.py`.
+3. Set an appropriate time limit (30 minutes should be sufficient).
+4. Submit your job and monitor its progress as before.
+5. Compare the final validation loss with the pretrained-from-scratch model. Which one is better?
+
+At the end of the training, you can sample from the finetuned model using:
 
 ```bash
-uv run python sample.py --out_dir out-french-philosophy --start "Your prompt here"
+uv run python sample.py --out_dir out-french-philosophy-ft --start "Your prompt here"
 ```
 
 **Exercice** Try to run it on a compute node in interactive mode to see how using GPUs accelerate the sampling.
