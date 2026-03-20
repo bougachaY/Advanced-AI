@@ -116,9 +116,9 @@ apptainer shell --env PATH=$HOME/.local/bin:$PATH --env UV_PROJECT_ENVIRONMENT=/
     Once you have completed this command with YOUR_USERNAME, save it as an alias in your `~/.bashrc` to avoid having to write it every time. Add these lines:
 
     ```bash
-    alias run_apptainer_gpu="apptainer shell --env PATH=$HOME/.local/bin:$PATH --env UV_PROJECT_ENVIRONMENT=/tmpdir/YOUR_USERNAME/envs/aai --bind /tmpdir,/work --nv /work/conteneurs/sessions-interactives/pytorch-24.02-py3-calmip-si.sif"
+    alias run_apptainer_login="apptainer shell --env PATH=$HOME/.local/bin:$PATH --env UV_PROJECT_ENVIRONMENT=/tmpdir/YOUR_USERNAME/envs/aai --bind /tmpdir,/work --nv /work/conteneurs/sessions-interactives/pytorch-24.02-py3-calmip-si.sif"
     ```
-    and then refresh the `~/.bashrc` with `source ~/.bashrc`. Then you can simply run `run_apptainer_gpu` to launch the apptainer image on a compute node.
+    and then refresh the `~/.bashrc` with `source ~/.bashrc`. Then you can simply run `run_apptainer_login` to launch the apptainer image on a compute node.
 
 
 You are now in the `apptainer` image! Install the env using:
