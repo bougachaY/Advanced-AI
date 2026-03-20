@@ -6,8 +6,9 @@
 #SBATCH --gres=gpu:1
 #SBATCH -p shared
 #SBATCH --time=00:15:00 
-#SBATCH --output=/users/formation/tpirtbgchs/job_results/out/job_%j.out
-#SBATCH --error=/users/formation/tpirtbgchs/job_results/err/job_%j.err
+#SBATCH --reservation=tpirt4
+#SBATCH --output=/users/formation/YOUR_USERNAME/job_results/out/job_%j.out
+#SBATCH --error=/users/formation/YOUR_USERNAME/job_results/err/job_%j.err
 
 
 apptainer exec \
@@ -15,4 +16,4 @@ apptainer exec \
 --env UV_PROJECT_ENVIRONMENT=/tmpdir/tpirtbgchs/envs/aai \
 --bind /tmpdir,/work \
 --nv /work/conteneurs/sessions-interactives/pytorch-24.02-py3-calmip-si.sif \
-uv run python test_sbatch.py
+uv run python mon_script.py
