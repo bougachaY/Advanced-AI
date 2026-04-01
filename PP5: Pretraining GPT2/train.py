@@ -285,7 +285,7 @@ while True:
     for micro_step in range(gradient_accumulation_steps):
         with ctx:
             logits = # TODO: forward pass through the model on X
-            loss = # TODO: compute the cross-entropy loss between the model predictions and targets Y. Reshape logits to (B*T, vocab_size) and Y to (B*T). Use ignore_index=-1.
+            loss = # TODO: compute the cross-entropy loss between the model predictions and targets Y. Reshape logits to (batch_size*sequence_length, vocab_size) and Y to (batch_size*sequence_length). Use ignore_index=-1.
             loss = (
                 loss / gradient_accumulation_steps
             )  # scale the loss to account for gradient accumulation
