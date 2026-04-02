@@ -289,7 +289,6 @@ It will run a few-seconds training.
 
 ### Training on Flickr30k
 
-
 To perform a longer training, you can play with the parameters of `train.py`:
 
 
@@ -323,7 +322,7 @@ Example:
 uv run train.py --train-samples 10000 --val-samples 128 --max-steps 500 --output-name projector_long.pt
 ```
 
-Try to understand every possible arguments and to make the most of a $\approx$ 5 minutes training.
+Try to understand every possible arguments and to make the most of a $\approx$ 5 minutes training. You can use interactive mode for this training but you can also try to submit the job with sbatch for practicing.
 
 ### Generating text from text+image
 
