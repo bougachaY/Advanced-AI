@@ -16,7 +16,11 @@ apptainer exec \
 --bind /tmpdir,/work \
 --nv /work/conteneurs/sessions-interactives/pytorch-24.02-py3-calmip-si.sif \
 <<<<<<< HEAD
+<<<<<<< HEAD
 uv run python test_sbatch.py
+=======
+uv run --no-sync python mon_script.py
+>>>>>>> upstream/main
 =======
 uv run --no-sync python mon_script.py
 >>>>>>> upstream/main

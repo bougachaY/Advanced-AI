@@ -298,6 +298,9 @@ while True:
 =======
             logits = # TODO: forward pass through the model on X
             loss = # TODO: compute the cross-entropy loss between the model predictions and targets Y. Reshape logits to (batch_size*sequence_length, vocab_size) and Y to (batch_size*sequence_length). Use ignore_index=-1.
+<<<<<<< HEAD
+>>>>>>> upstream/main
+=======
 >>>>>>> upstream/main
             loss = (
                 loss / gradient_accumulation_steps
