@@ -17,5 +17,6 @@ env/
 site/
 PP3: CLIP/data/cifar*
 !PP5: Pretraining GPT2/data/french_philosophy/*.bin
-PP5: Pretraining GPT2/model_solution.py
-PP5: Pretraining GPT2/train_solution.py
+nanoVLM
+PP7: VLM warmup/models/modality_projector_sol.py
+PP7: VLM warmup/models/vision_language_model_sol.py

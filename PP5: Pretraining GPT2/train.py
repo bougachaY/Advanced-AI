@@ -290,10 +290,15 @@ while True:
     # and using the GradScaler if data type is float16
     for micro_step in range(gradient_accumulation_steps):
         with ctx:
+<<<<<<< HEAD
             B, T, C = X.size()  # batch size, sequence length, vocab size (logit dim)
             logits = model(X)  # TODO: forward pass through the model on X
             loss = F.cross_entropy(Y.view(B*T), logits.view(B*T, vocab_size), ignore_index=-1)
             # TODO: compute the cross-entropy loss between the model predictions and targets Y. Reshape logits to (B*T, vocab_size) and Y to (B*T). Use ignore_index=-1.
+=======
+            logits = # TODO: forward pass through the model on X
+            loss = # TODO: compute the cross-entropy loss between the model predictions and targets Y. Reshape logits to (batch_size*sequence_length, vocab_size) and Y to (batch_size*sequence_length). Use ignore_index=-1.
+>>>>>>> upstream/main
             loss = (
                 loss / gradient_accumulation_steps
             )  # scale the loss to account for gradient accumulation

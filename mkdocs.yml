@@ -35,6 +35,8 @@ nav:
       - "PP3: CLIP": practicals/pp3-clip.md
       - "PP4: Tokenizer": practicals/pp4-tokenizer.md
       - "PP5: Pretraining GPT2": practicals/pp5-pretraining.md
+      - "PP6: Self-Supervised Learning": practicals/pp6-ssl.md
+      - "PP7: VLM Warmup": practicals/pp7-vlm-warmup.md
   - Lecture Notes: lecture_notes.md
 
 markdown_extensions:
