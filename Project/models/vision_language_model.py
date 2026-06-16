@@ -39,7 +39,6 @@ from typing import Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from safetensors.torch import load_model, save_model
 
 from models.config import VLMConfig
 from models.vision_transformer import ViT  # noqa: F401
@@ -47,7 +46,16 @@ from models.language_model import LanguageModel  # noqa: F401
 from models.modality_projector import ModalityProjector  # noqa: F401
 from data.processors import get_tokenizer  # noqa: F401
 
+import os
 
+def save_model(model, path):
+    from safetensors.torch import save_file
+    state_dict = {k: v.detach().cpu() for k, v in model.state_dict().items()}
+    tmp = path + ".tmp"
+    save_file(state_dict, tmp)
+    os.replace(tmp, path)
+    
+    
 def top_k_top_p_filtering(logits, top_k=0, top_p=1.0, filter_value=-float("inf")):
     """Nucleus (top-p) and top-k filtering for token sampling. PROVIDED."""
     if top_k > 0:
@@ -274,6 +282,7 @@ class VisionLanguageModel(nn.Module):
     @classmethod
     def from_pretrained(cls, path: str, revision: Optional[str] = None):
         """Load a trained VLM checkpoint from a local directory."""
+        from safetensors.torch import load_model
         config_path = os.path.join(path, "config.json")
         weights_path = os.path.join(path, "model.safetensors")
         if not os.path.exists(config_path) or not os.path.exists(weights_path):
