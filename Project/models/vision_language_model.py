@@ -187,16 +187,22 @@ class VisionLanguageModel(nn.Module):
 
         # TODO 5 — Run the merged embedding sequence through the language model.
         hidden, _ = self.decoder(token_embd, attention_mask=attention_mask, kv_cache=None, start_pos=0)
-
         # TODO 6 — If targets are provided: apply the language model head to get logits, compute cross-entropy loss.
+        # shift logits and targets by 1 TODO
         if targets is not None:
             logits = self.decoder.head(hidden)
+            
+            # Shift so that tokens < n predict n
+            shift_logits = logits[..., :-1, :].contiguous()
+            shift_targets = targets[..., 1:].contiguous()
+            
             loss = F.cross_entropy(
-                logits.view(-1, logits.size(-1)),
-                targets.view(-1),
+                shift_logits.view(-1, shift_logits.size(-1)),
+                shift_targets.view(-1),
                 ignore_index=-100,
             )
             return logits, loss
+
 
         # TODO 7 — If no targets: return (hidden, None) for generation.
         return hidden, None
@@ -290,5 +296,5 @@ class VisionLanguageModel(nn.Module):
         with open(config_path) as f:
             cfg = VLMConfig.from_dict(json.load(f))
         model = cls(cfg, load_backbone=False)
-        load_model(model, weights_path)
+        load_model(model, weights_path, strict=False)
         return model

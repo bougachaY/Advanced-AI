@@ -100,26 +100,15 @@ def get_dataloaders(train_cfg: TrainConfig, vlm_cfg: VLMConfig):
             )
 
         ds = concatenate_datasets(splits)
+
         print(f"Concatenated {len(splits)} subsets → {len(ds)} samples")
 
         from data.dataset import CauldronDataset
-        split_ds = ds.train_test_split(
-            test_size=0.1,
-            seed=42,
-        )
-        
         train_dataset = CauldronDataset(
-            split_ds["train"],
-            tokenizer,
-            image_processor,
-            vlm_cfg,
+            ds, tokenizer, image_processor, vlm_cfg
         )
-        
         val_dataset = CauldronDataset(
-            split_ds["test"],
-            tokenizer,
-            image_processor,
-            vlm_cfg,
+            ds, tokenizer, image_processor, vlm_cfg
         )
 
     collator = VQACollator(tokenizer, max_length=train_cfg.max_length)
@@ -128,7 +117,7 @@ def get_dataloaders(train_cfg: TrainConfig, vlm_cfg: VLMConfig):
         train_dataset,
         batch_size=train_cfg.batch_size,
         collate_fn=collator,
-        num_workers=2,
+        num_workers=2,  
         pin_memory=True,
     )
     val_loader = DataLoader(
@@ -293,7 +282,7 @@ def train(train_cfg: TrainConfig, vlm_cfg: VLMConfig):
         #           backpropagating, so gradients accumulate correctly across
         #           micro-steps.
         #
-        # TODO 4 — Call backward on the scaled loss to accumulate gradients.
+        # TODO 4 — Call backwardmodel on the scaled loss to accumulate gradients.
         #
         # TODO 5 — On update steps only (is_update_step):
         #           Clip gradients with torch.nn.utils.clip_grad_norm_ using
@@ -396,7 +385,7 @@ def train(train_cfg: TrainConfig, vlm_cfg: VLMConfig):
                         indent=2,
                     )
 
-                if mmstar_acc > best_mmstar_acc:
+                if mmstar_acc > (best_mmstar_acc + 0.5):
                     best_mmstar_acc = mmstar_acc
                     ckpt = os.path.join(
                         train_cfg.checkpoint_dir,

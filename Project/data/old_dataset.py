@@ -41,12 +41,11 @@ class CauldronDataset(IterableDataset):
     Returns None for rows that cannot be converted (caller / collator skips them).
     """
 
-    def __init__(self, dataset, tokenizer, image_processor, cfg, shuffle_buffer=1000):
+    def __init__(self, dataset, tokenizer, image_processor, cfg):
         self.dataset = dataset
         self.tokenizer = tokenizer
         self.image_processor = image_processor
         self.cfg = cfg
-        self.shuffle_buffer = shuffle_buffer
         self.image_string = get_image_string(
             cfg.projector.image_token_length, cfg.image_token
         )
@@ -106,7 +105,6 @@ class CauldronDataset(IterableDataset):
         return self.image_processor(image)
 
     def __iter__(self):
-        buffer = []
         for item in self.dataset:
             try:
                 images = item.get("images") or []
@@ -119,30 +117,15 @@ class CauldronDataset(IterableDataset):
                 if not messages:
                     continue
                 input_ids, attention_mask, labels = self._tokenize(messages)
-                
-                processed_item = {
+                yield {
                     "input_ids": input_ids,
                     "attention_mask": attention_mask,
                     "labels": labels,
                     "pixel_values": pixel_values,
                 }
-                
-                if self.shuffle_buffer > 0:
-                    buffer.append(processed_item)
-                    if len(buffer) >= self.shuffle_buffer:
-                        idx = random.randrange(len(buffer))
-                        yield buffer.pop(idx)
-                else:
-                    yield processed_item
-                    
             except Exception as e:
                 logging.warning(f"Skipping sample: {e}")
                 continue
-                
-        # Yield remaining items in buffer
-        while buffer:
-            idx = random.randrange(len(buffer))
-            yield buffer.pop(idx)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
