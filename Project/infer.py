@@ -33,7 +33,7 @@ def build_prompt(question: str, tokenizer, cfg, use_image: bool) -> str:
         }
     ]
     prompt = tokenizer.apply_chat_template(
-        [messages], tokenize=False, add_generation_prompt=True
+        messages, tokenize=False, add_generation_prompt=True
     )
     if isinstance(prompt, list):
         return prompt[0]
@@ -73,7 +73,7 @@ def main():
 
     tokenizer = get_tokenizer(model.cfg.lm.tokenizer, model.cfg.image_token)
 
-    use_image = args.image is not None
+    use_image = False
 
     # --- Image branch ---
     pixel_values = None
@@ -106,3 +106,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+#Question: Which is the largest planet?\nChoices:\nA. Uranus\nB. Jupiter\nC. Mars\nD. Venus\nAnswer with the letter.

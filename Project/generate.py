@@ -74,7 +74,7 @@ def main():
     )
     messages = [{"role": "user", "content": image_string + args.prompt}]
     encoded = tokenizer.apply_chat_template(
-        [messages], tokenize=True, add_generation_prompt=True
+        messages, tokenize=True, add_generation_prompt=True
     )
     input_ids = torch.tensor(encoded).to(device)    # [1, T]
     attention_mask = torch.ones_like(input_ids)

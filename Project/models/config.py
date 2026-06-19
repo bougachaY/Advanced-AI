@@ -37,7 +37,7 @@ class ViTConfig:
 
     # Dropout probability applied in ViTAttention (attn weights + residual)
     # and in ViTMLP; set to 0 for inference / pretrained models
-    dropout: float = 0.0
+    dropout: float = 0.3
 
     # Epsilon for LayerNorm in each ViTBlock (ln1, ln2)
     ln_eps: float = 1e-6
@@ -97,7 +97,7 @@ class LMConfig:
 
     # Dropout probability in LMAttention (attn weights + residual);
     # 0 at inference / for pretrained weights
-    dropout: float = 0.0
+    dropout: float = 0.3
 
     # Multiplicative scaling applied to cos/sin embeddings in RotaryEmbedding;
     # 1.0 means no extra scaling beyond the standard RoPE formulation
@@ -151,7 +151,7 @@ class VLMConfig:
 
     # Directory where VisionLanguageModel.save_pretrained() writes the
     # safetensors checkpoint and config JSON during training
-    checkpoint_path: str = 'checkpoints'
+    checkpoint_path: str = '/tmpdir/tpirtbgchs/checkpoints'
 
     @classmethod
     def from_dict(cls, d: dict) -> 'VLMConfig':
@@ -171,7 +171,7 @@ class TrainConfig:
 
     # AdamW learning rate for the Modality Projector parameter group;
     # high because MP is randomly initialised (no pretrained weights)
-    lr_mp: float = 5e-3
+    lr_mp: float = 1e-3
 
     # AdamW learning rate for the ViT (vision encoder) parameter group;
     # low to preserve pretrained SigLIP2 features
@@ -205,7 +205,7 @@ class TrainConfig:
 
     # Fraction of max_steps used for linear LR warmup (0 → max_lr);
     # after warmup, LR decays via cosine schedule to max_lr/10
-    warmup_fraction: float = 0.03
+    warmup_fraction: float = 0.05
 
     # ─── Dataset ──────────────────────────────────────────────────────────────
 
@@ -243,9 +243,16 @@ class TrainConfig:
     mmstar_val_path: str = '/work/shared/TPIRT/mmstar'
     mmstar_eval_interval: int = 0
     mmstar_eval_limit: int = 128
-    mmstar_output_dir: str = 'eval_results'
+    mmstar_output_dir: str = '/tmpdir/tpirtbgchs/eval_results'
 
-    checkpoint_dir: str = 'checkpoints'
+    # Checkpoints are written to the writable /tmpdir scratch (the repo has a
+    # very limited disk quota). The single best checkpoint is copied back to
+    # final_checkpoint_dir (in the repo) at the end of training.
+    checkpoint_dir: str = '/tmpdir/tpirtbgchs/checkpoints'
+
+    # Repo-local destination for the final best checkpoint (survives /tmpdir
+    # purges). Only one checkpoint is copied here to keep repo usage minimal.
+    final_checkpoint_dir: str = 'checkpoints_best'
 
     # Whether to apply torch.compile() to the model for potential speedup
     compile: bool = False

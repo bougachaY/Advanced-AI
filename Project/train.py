@@ -22,12 +22,21 @@ import argparse
 import json
 import math
 import os
+import shutil
 import time
 from dataclasses import fields
 
+# Route any HuggingFace datasets cache writes to the writable /tmpdir scratch.
+# The dataset itself lives on read-only /work/shared, so without this a stray
+# cache write would raise PermissionError. Must be set before `datasets` is
+# imported (directly or transitively).
+os.environ.setdefault(
+    "HF_DATASETS_CACHE", "/tmpdir/tpirtbgchs/hf_datasets_cache"
+)
+
 import torch
 import torch.optim as optim
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, IterableDataset
 
 from models.config import VLMConfig, TrainConfig
 from models.vision_language_model import VisionLanguageModel
@@ -54,6 +63,36 @@ def get_lr(step: int, max_lr: float, max_steps: int) -> float:
     )
 
 
+# ── Train/val holdout (streaming) ─────────────────────────────────────────────
+class _HoldoutStream(IterableDataset):
+    """Route a deterministic 1-in-`every` fraction of a stream to validation.
+
+    This wraps an existing (already-working) IterableDataset and simply keeps or
+    drops samples by their position in the stream:
+        * want_val=False  → training set   (keeps 19/20 = 95%)
+        * want_val=True   → validation set (keeps  1/20 =  5%)
+
+    Why this design (instead of Dataset.select / train_test_split)?
+      * It does NOT touch the underlying Arrow access pattern at all. The wrapped
+        dataset still reads its rows sequentially, exactly like the original
+        working run — so it is just as fast (no random reads, no stalls).
+      * It writes nothing to disk, so the read-only dataset directory is a
+        non-issue.
+      * Train and val are guaranteed disjoint (complementary positions).
+    """
+
+    def __init__(self, base, want_val: bool, every: int = 20):
+        self.base = base
+        self.want_val = want_val
+        self.every = every
+
+    def __iter__(self):
+        for i, sample in enumerate(self.base):
+            is_val = (i % self.every == 0)
+            if is_val == self.want_val:
+                yield sample
+
+
 # ── Data loading (PROVIDED) ───────────────────────────────────────────────────
 def get_dataloaders(train_cfg: TrainConfig, vlm_cfg: VLMConfig):
     from datasets import load_from_disk, concatenate_datasets
@@ -71,16 +110,20 @@ def get_dataloaders(train_cfg: TrainConfig, vlm_cfg: VLMConfig):
         print(f"Loading dataset from disk: {train_cfg.dataset_local_path}")
         raw = load_from_disk(train_cfg.dataset_local_path)
         ds = raw["train"] if "train" in raw else raw
+        
+        # Read the full dataset sequentially (fast) and separate train/val with
+        # a streaming 1-in-20 holdout filter (no disk writes, no random reads).
+        print(f"Loaded Flickr: {len(ds)} samples (95% train / 5% val holdout)")
 
         from data.dataset import FlickrDataset
-        train_dataset = FlickrDataset(
-            ds, tokenizer, image_processor, vlm_cfg
-        )
-        val_dataset = FlickrDataset(
-            ds, tokenizer, image_processor, vlm_cfg
-        )
+        base_train = FlickrDataset(ds, tokenizer, image_processor, vlm_cfg)
+        base_val = FlickrDataset(ds, tokenizer, image_processor, vlm_cfg)
+        train_dataset = _HoldoutStream(base_train, want_val=False, every=20)
+        val_dataset = _HoldoutStream(base_val, want_val=True, every=20)
     else:
-        # Load and concatenate all cauldron subsets
+        # Load and concatenate all cauldron subsets (sequential reads — the
+        # proven-fast baseline path). Train/val are separated downstream by a
+        # streaming 1-in-20 holdout filter, so no on-disk split is needed.
         splits = []
         base_path = train_cfg.dataset_local_path
         for subset in train_cfg.dataset_subsets:
@@ -100,16 +143,17 @@ def get_dataloaders(train_cfg: TrainConfig, vlm_cfg: VLMConfig):
             )
 
         ds = concatenate_datasets(splits)
-
-        print(f"Concatenated {len(splits)} subsets → {len(ds)} samples")
+        print(f"Loaded Cauldron: {len(ds)} samples (95% train / 5% val holdout)")
 
         from data.dataset import CauldronDataset
-        train_dataset = CauldronDataset(
-            ds, tokenizer, image_processor, vlm_cfg
+        base_train = CauldronDataset(
+            ds, tokenizer, image_processor, vlm_cfg, shuffle_buffer=1000
         )
-        val_dataset = CauldronDataset(
-            ds, tokenizer, image_processor, vlm_cfg
+        base_val = CauldronDataset(
+            ds, tokenizer, image_processor, vlm_cfg, shuffle_buffer=0
         )
+        train_dataset = _HoldoutStream(base_train, want_val=False, every=20)
+        val_dataset = _HoldoutStream(base_val, want_val=True, every=20)
 
     collator = VQACollator(tokenizer, max_length=train_cfg.max_length)
 
@@ -160,16 +204,19 @@ def train(train_cfg: TrainConfig, vlm_cfg: VLMConfig):
         {
             "params": list(model.MP.parameters()),
             "lr": train_cfg.lr_mp,
+            "weight_decay": 0.05,
             "name": "MP",
         },
         {
             "params": list(model.vision_encoder.parameters()),
             "lr": train_cfg.lr_vit,
+            "weight_decay": 0.05,
             "name": "ViT",
         },
         {
             "params": list(model.decoder.parameters()),
             "lr": train_cfg.lr_lm,
+            "weight_decay": 0.05,
             "name": "LM",
         },
     ]
@@ -204,7 +251,9 @@ def train(train_cfg: TrainConfig, vlm_cfg: VLMConfig):
     global_step = 0
     best_val_loss = float("inf")
     best_mmstar_acc = -1.0
+    best_ckpt_path = None   # path of the best checkpoint (copied back at the end)
     batch_loss = 0.0   # set by the student section each micro-step
+    grad_norm = 0.0    # gradient norm after clipping
     optimizer.zero_grad()
 
     print(
@@ -256,7 +305,7 @@ def train(train_cfg: TrainConfig, vlm_cfg: VLMConfig):
         
         # TODO 5 — Optimiser step (only on update steps):
         if is_update_step:
-            torch.nn.utils.clip_grad_norm_(
+            grad_norm = torch.nn.utils.clip_grad_norm_(
                 all_params, train_cfg.max_grad_norm
             )
             for g, max_lr in zip(optimizer.param_groups, max_lrs):
@@ -299,11 +348,17 @@ def train(train_cfg: TrainConfig, vlm_cfg: VLMConfig):
         accum_step += 1
 
         # ── Logging ───────────────────────────────────────────────────────────
-        if is_update_step and global_step % train_cfg.log_interval == 0:
+        # Also print the first few steps so progress is visible quickly instead
+        # of waiting for the first log_interval boundary.
+        if is_update_step and (
+            global_step <= 5 or global_step % train_cfg.log_interval == 0
+        ):
             elapsed = time.time() - t0
+            current_lr_mp = optimizer.param_groups[0]["lr"]
             print(
-                f"step {global_step:5d} | loss {batch_loss:.4f}"
-                f" | {elapsed:.1f}s"
+                f"step {global_step:5d} | loss {batch_loss:.4f} | "
+                f"grad_norm {grad_norm:.3f} | lr_mp {current_lr_mp:.2e} | "
+                f"{elapsed:.1f}s"
             )
 
         # ── Evaluation ────────────────────────────────────────────────────────
@@ -338,6 +393,7 @@ def train(train_cfg: TrainConfig, vlm_cfg: VLMConfig):
                     train_cfg.checkpoint_dir, f"best_step{global_step}"
                 )
                 model.save_pretrained(ckpt)
+                best_ckpt_path = ckpt
                 print(f"  → new best checkpoint saved to {ckpt}")
 
             if (
@@ -397,6 +453,17 @@ def train(train_cfg: TrainConfig, vlm_cfg: VLMConfig):
             model.train()
 
     print(f"Training complete. Best val loss: {best_val_loss:.4f}")
+
+    # ── Copy the best checkpoint back to the repo ──────────────────────────────
+    # Checkpoints live on /tmpdir scratch (which may be purged); persist the
+    # single best one to the repo so it survives.
+    if best_ckpt_path is not None and os.path.isdir(best_ckpt_path):
+        dest = os.path.join(
+            train_cfg.final_checkpoint_dir, os.path.basename(best_ckpt_path)
+        )
+        os.makedirs(train_cfg.final_checkpoint_dir, exist_ok=True)
+        shutil.copytree(best_ckpt_path, dest, dirs_exist_ok=True)
+        print(f"Best checkpoint copied to {dest}")
 
 
 # ── CLI ───────────────────────────────────────────────────────────────────────

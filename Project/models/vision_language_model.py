@@ -200,6 +200,7 @@ class VisionLanguageModel(nn.Module):
                 shift_logits.view(-1, shift_logits.size(-1)),
                 shift_targets.view(-1),
                 ignore_index=-100,
+                label_smoothing=0.2,
             )
             return logits, loss
 
