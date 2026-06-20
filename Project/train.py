@@ -95,7 +95,7 @@ class _HoldoutStream(IterableDataset):
 
 # ── Data loading (PROVIDED) ───────────────────────────────────────────────────
 def get_dataloaders(train_cfg: TrainConfig, vlm_cfg: VLMConfig):
-    from datasets import load_from_disk, concatenate_datasets
+    from datasets import load_from_disk
 
     if not train_cfg.dataset_local_path:
         raise ValueError(
@@ -142,8 +142,17 @@ def get_dataloaders(train_cfg: TrainConfig, vlm_cfg: VLMConfig):
                 "Run prepare_datasets.py first."
             )
 
-        ds = concatenate_datasets(splits)
-        print(f"Loaded Cauldron: {len(ds)} samples (95% train / 5% val holdout)")
+        total_samples = sum(len(s) for s in splits)
+        from datasets import interleave_datasets
+        ds = interleave_datasets(
+            [s.to_iterable_dataset() for s in splits],
+            seed=42,
+            stopping_strategy="all_exhausted",
+        )
+        print(
+            f"Loaded Cauldron: {total_samples} unique samples across "
+            f"{len(splits)} subsets, interleaved (95% train / 5% val holdout)"
+        )
 
         from data.dataset import CauldronDataset
         base_train = CauldronDataset(

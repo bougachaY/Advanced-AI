@@ -22,4 +22,5 @@ apptainer exec \
 --nv /work/conteneurs/sessions-interactives/pytorch-24.02-py3-calmip-si.sif \
 uv run python train.py \
     --dataset_type cauldron \
-    --max_steps 10000 
+    --max_steps 10000 \
+    --gradient_accumulation_steps 16

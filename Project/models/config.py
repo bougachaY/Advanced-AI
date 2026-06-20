@@ -37,7 +37,7 @@ class ViTConfig:
 
     # Dropout probability applied in ViTAttention (attn weights + residual)
     # and in ViTMLP; set to 0 for inference / pretrained models
-    dropout: float = 0.3
+    dropout: float = 0.0
 
     # Epsilon for LayerNorm in each ViTBlock (ln1, ln2)
     ln_eps: float = 1e-6
@@ -97,7 +97,7 @@ class LMConfig:
 
     # Dropout probability in LMAttention (attn weights + residual);
     # 0 at inference / for pretrained weights
-    dropout: float = 0.3
+    dropout: float = 0.0
 
     # Multiplicative scaling applied to cos/sin embeddings in RotaryEmbedding;
     # 1.0 means no extra scaling beyond the standard RoPE formulation
