@@ -1,0 +1,40 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    ports:
+      - "8000:8000"
+    # CORRECTION : Le chemin interne doit correspondre à la variable CHECKPOINT_PATH de model.py
+    volumes:
+      - ./project/checkpoints/best_step100:/app/project/checkpoints/best_step100:ro
+    # Ajout du support GPU pour permettre l'inférence rapide sur Turpan / GCP
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status==200 else 1)"
+      interval: 15s
+      timeout: 5s
+      start_period: 180s
+      retries: 6
+
+  ui:
+    build:
+      context: .
+      dockerfile: ui/Dockerfile
+    ports:
+      - "7860:7860"
+    environment:
+      API_URL: http://api:8000
+    depends_on:
+      api:
+        condition: service_healthy

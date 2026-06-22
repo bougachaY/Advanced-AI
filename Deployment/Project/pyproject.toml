@@ -1,0 +1,51 @@
+[project]
+name = "advanced-ai"
+version = "0.1.0"
+requires-python = ">=3.10"
+
+[dependency-groups]
+student = [
+    "datasets>=4.5.0",
+    "ftfy>=6.3.1",
+    "matplotlib>=3.10.8",
+    "numpy>=2.4.2",
+    "pillow>=12.1.1",
+    "scikit-learn>=1.8.0",
+    "tiktoken>=0.12.0",
+    "torch>=2.10.0",
+    "torchvision>=0.25.0",
+    "tqdm>=4.67.3",
+    "transformers>=5.2.0",
+]
+docs = [
+    "mkdocs-material>=9.0",
+    "pymdown-extensions>=10.0",
+]
+turpan = [
+    "datasets>=2.19,<3",
+    "numpy<2.0",
+    "ftfy>=6.1,<7",
+    "pillow>=9,<12",
+    "tiktoken>=0.5,<0.8",
+    "tqdm>=4.65,<5",
+    "transformers>=4.38,<5",
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: requires HuggingFace weight downloads (~GB). Run with: pytest -m slow",
+]
+
+[tool.uv]
+conflicts = [
+    [
+        { group = "student" },
+        { group = "turpan" },
+    ],
+]
+
+[tool.uv.dependency-groups]
+student = { requires-python = ">=3.11" }
+turpan = { requires-python = ">=3.10,<3.11" }
+docs = { requires-python = ">=3.10,<3.11" }

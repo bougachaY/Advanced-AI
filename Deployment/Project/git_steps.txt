@@ -1,0 +1,13 @@
+git status 
+git add . (ou fichier)
+git commit -m "message"
+git push origin ezz
+
+
+git switch main
+git fetch
+git pull origin main
+git merge ezz
+git push origin main
+git switch ezz
+git merge main
