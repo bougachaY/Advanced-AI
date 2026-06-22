@@ -5,7 +5,6 @@ services:
       dockerfile: api/Dockerfile
     ports:
       - "8000:8000"
-    # CORRECTION : Le chemin interne doit correspondre à la variable CHECKPOINT_PATH de model.py
     volumes:
       - ./project/checkpoints/best_step100:/app/project/checkpoints/best_step100:ro
     # Ajout du support GPU pour permettre l'inférence rapide sur Turpan / GCP

@@ -3,7 +3,6 @@ FROM python:3.11-slim
 WORKDIR /app
 ENV PYTHONUNBUFFERED=1
 
-# Installation des dépendances requises pour ton VLM
 RUN pip install --no-cache-dir \
     fastapi>=0.115 \
     "uvicorn[standard]>=0.32" \
@@ -14,7 +13,6 @@ RUN pip install --no-cache-dir \
     torch==2.3.0 \
     torchvision
 
-# Attention aux chemins lors du COPY puisque le contexte de build est à la racine '.'
 COPY api/main.py api/model.py api/schemas.py ./
 COPY project/ ./project/
 
