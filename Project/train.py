@@ -44,6 +44,77 @@ from data.processors import get_tokenizer, get_image_processor
 from data.collator import VQACollator
 
 
+# ── Checkpoint helpers ────────────────────────────────────────────────────────
+
+def find_latest_valid_checkpoint(checkpoint_dir: str):
+    """Return the path of the most recent complete checkpoint, or None.
+
+    A checkpoint is considered valid only when it contains a COMPLETE sentinel
+    file, which is written last by save_training_state(). This guards against
+    checkpoints that were partially written when a job hit the wall-time limit.
+    """
+    import glob
+    dirs = sorted(
+        glob.glob(os.path.join(checkpoint_dir, "best_step*")),
+        key=lambda p: int(p.rsplit("step", 1)[-1]),
+        reverse=True,
+    )
+    for d in dirs:
+        if os.path.exists(os.path.join(d, "COMPLETE")):
+            return d
+    return None
+
+
+def save_training_state(ckpt_dir, global_step, best_val_loss, optimizer,
+                        keep_last_n, checkpoint_dir):
+    """Persist optimizer state and scalar training state alongside the model.
+
+    Write order is deliberate:
+        1. optimizer.pt    (largest file, most likely to be incomplete if killed)
+        2. train_state.json
+        3. COMPLETE        (sentinel — only present when 1 & 2 are fully written)
+
+    After writing, prune the oldest valid checkpoints beyond keep_last_n.
+    """
+    torch.save(optimizer.state_dict(), os.path.join(ckpt_dir, "optimizer.pt"))
+    with open(os.path.join(ckpt_dir, "train_state.json"), "w") as f:
+        json.dump({"global_step": global_step, "best_val_loss": best_val_loss}, f)
+    open(os.path.join(ckpt_dir, "COMPLETE"), "w").close()
+    _prune_old_checkpoints(checkpoint_dir, keep_last_n)
+
+
+def load_training_state(ckpt_dir, model, optimizer):
+    """Load model weights, optimizer state, and scalar state from a checkpoint.
+
+    Returns (global_step, best_val_loss).
+    optimizer.pt is optional: if absent, the optimizer starts fresh (e.g. when
+    bootstrapping a checkpoint that was saved before multi-job support was added).
+    """
+    from safetensors.torch import load_model as _load_model
+    _load_model(model, os.path.join(ckpt_dir, "model.safetensors"), strict=False)
+    opt_path = os.path.join(ckpt_dir, "optimizer.pt")
+    if os.path.exists(opt_path):
+        opt_state = torch.load(opt_path, map_location="cpu")
+        optimizer.load_state_dict(opt_state)
+    else:
+        print("  Warning: optimizer.pt not found — resuming with fresh optimizer state")
+    with open(os.path.join(ckpt_dir, "train_state.json")) as f:
+        state = json.load(f)
+    return state["global_step"], state["best_val_loss"]
+
+
+def _prune_old_checkpoints(checkpoint_dir, keep_last_n):
+    """Delete the oldest valid checkpoint directories beyond keep_last_n."""
+    import glob
+    dirs = sorted(
+        glob.glob(os.path.join(checkpoint_dir, "best_step*")),
+        key=lambda p: int(p.rsplit("step", 1)[-1]),
+    )
+    for old_dir in dirs[:-keep_last_n]:
+        if os.path.exists(os.path.join(old_dir, "COMPLETE")):
+            shutil.rmtree(old_dir)
+
+
 # ── Cosine LR schedule with linear warmup ────────────────────────────────────
 def get_lr(step: int, max_lr: float, max_steps: int) -> float:
     """Return the learning rate for a given step.
@@ -94,7 +165,7 @@ class _HoldoutStream(IterableDataset):
 
 
 # ── Data loading (PROVIDED) ───────────────────────────────────────────────────
-def get_dataloaders(train_cfg: TrainConfig, vlm_cfg: VLMConfig):
+def get_dataloaders(train_cfg: TrainConfig, vlm_cfg: VLMConfig, data_seed: int = 42):
     from datasets import load_from_disk
 
     if not train_cfg.dataset_local_path:
@@ -146,7 +217,7 @@ def get_dataloaders(train_cfg: TrainConfig, vlm_cfg: VLMConfig):
         from datasets import interleave_datasets
         ds = interleave_datasets(
             [s.to_iterable_dataset() for s in splits],
-            seed=42,
+            seed=data_seed,
             stopping_strategy="all_exhausted",
         )
         print(
@@ -241,8 +312,33 @@ def train(train_cfg: TrainConfig, vlm_cfg: VLMConfig):
         p for g in optimizer.param_groups for p in g["params"]
     ]
 
+    # ── Resume from checkpoint ─────────────────────────────────────────────────
+    # Must happen before get_dataloaders so the updated data_seed is used.
+    os.makedirs(train_cfg.checkpoint_dir, exist_ok=True)
+    global_step = 0
+    best_val_loss = float("inf")
+    best_ckpt_path = None
+
+    resume_path = train_cfg.resume_from
+    if resume_path == "auto":
+        resume_path = find_latest_valid_checkpoint(train_cfg.checkpoint_dir) or ""
+
+    if resume_path:
+        print(f"Resuming from {resume_path}")
+        global_step, best_val_loss = load_training_state(
+            resume_path, model, optimizer
+        )
+        # Use resumed step as data seed → fresh sample ordering each job
+        train_cfg.data_seed = global_step
+        best_ckpt_path = resume_path
+        print(
+            f"  Resumed at step {global_step}, "
+            f"best_val_loss {best_val_loss:.4f}, "
+            f"data_seed {train_cfg.data_seed}"
+        )
+
     # ── Data ──────────────────────────────────────────────────────────────────
-    train_loader, val_loader = get_dataloaders(train_cfg, vlm_cfg)
+    train_loader, val_loader = get_dataloaders(train_cfg, vlm_cfg, data_seed=train_cfg.data_seed)
     iter_train = iter(train_loader)
 
     # ── AMP context ───────────────────────────────────────────────────────────
@@ -253,14 +349,8 @@ def train(train_cfg: TrainConfig, vlm_cfg: VLMConfig):
         device_type=device.type, dtype=autocast_dtype
     )
 
-    # ── Checkpoint directory ──────────────────────────────────────────────────
-    os.makedirs(train_cfg.checkpoint_dir, exist_ok=True)
-
-    # ── Training state ────────────────────────────────────────────────────────
-    global_step = 0
-    best_val_loss = float("inf")
+    # ── Training state (remaining fields; global_step/best_val_loss/best_ckpt_path set above) ──
     best_mmstar_acc = -1.0
-    best_ckpt_path = None   # path of the best checkpoint (copied back at the end)
     batch_loss = 0.0   # set by the student section each micro-step
     grad_norm = 0.0    # gradient norm after clipping
     optimizer.zero_grad()
@@ -402,6 +492,10 @@ def train(train_cfg: TrainConfig, vlm_cfg: VLMConfig):
                     train_cfg.checkpoint_dir, f"best_step{global_step}"
                 )
                 model.save_pretrained(ckpt)
+                save_training_state(
+                    ckpt, global_step, best_val_loss, optimizer,
+                    train_cfg.keep_last_n_checkpoints, train_cfg.checkpoint_dir,
+                )
                 best_ckpt_path = ckpt
                 print(f"  → new best checkpoint saved to {ckpt}")
 

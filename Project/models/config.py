@@ -257,6 +257,21 @@ class TrainConfig:
     # Whether to apply torch.compile() to the model for potential speedup
     compile: bool = False
 
+    # Resume from an existing checkpoint.
+    # 'auto'   → find the latest valid checkpoint in checkpoint_dir automatically
+    # '<path>' → load from this exact directory
+    # ''       → start from scratch (default)
+    resume_from: str = ''
+
+    # Seed passed to interleave_datasets for the Cauldron data pipeline.
+    # Set automatically to global_step on resume so each job sees a fresh
+    # data ordering without replaying the exact same sequence.
+    data_seed: int = 42
+
+    # Number of checkpoint directories to keep in checkpoint_dir; older ones
+    # are deleted after a new COMPLETE checkpoint is written, saving /tmpdir quota.
+    keep_last_n_checkpoints: int = 2
+
     def __post_init__(self):
         # Auto-append dataset type/subset to base path if not already present
         if self.dataset_type == 'flickr' and not self.dataset_local_path.endswith('flickr30k'):
